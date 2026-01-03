@@ -456,10 +456,21 @@
   border-radius: 12px;
 }
 
+.xrg-manual-adjust-row {
+  margin-bottom: 12px;
+}
+
+.xrg-manual-label {
+  display: block;
+  font-size: 12px;
+  color: var(--xrg-text-secondary);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
 .xrg-manual-adjust-container {
   display: flex;
   gap: 8px;
-  margin-bottom: 8px;
 }
 
 .xrg-manual-input {
@@ -487,9 +498,9 @@
   background: var(--xrg-primary);
   border: none;
   border-radius: 8px;
-  padding: 10px 20px;
+  padding: 10px 16px;
   color: white;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.2s ease;
@@ -508,6 +519,7 @@
   font-size: 11px;
   color: var(--xrg-text-secondary);
   text-align: center;
+  margin-top: 8px;
 }
 
 /* Session Timer */
@@ -609,79 +621,68 @@
   color: var(--xrg-text-secondary);
 }
 
-/* Backlog Section */
-.xrg-backlog-section {
+/* Session History Section */
+.xrg-session-history-section {
   margin-bottom: 20px;
   padding: 12px;
   background: var(--xrg-bg-elevated);
   border-radius: 12px;
 }
 
-.xrg-backlog-container {
+.xrg-session-history-container {
+  min-height: 60px;
+}
+
+.xrg-no-sessions {
   text-align: center;
-}
-
-.xrg-backlog-status {
-  font-size: 14px;
+  padding: 20px;
   color: var(--xrg-text-secondary);
-  padding: 12px;
-  margin-bottom: 12px;
+  font-size: 13px;
 }
 
-.xrg-backlog-main {
+.xrg-session-list {
   display: flex;
-  align-items: baseline;
-  justify-content: center;
+  flex-direction: column;
   gap: 8px;
-  margin-bottom: 4px;
 }
 
-.xrg-backlog-value {
-  font-size: 32px;
-  font-weight: 900;
-  color: #71767b;
-}
-
-.xrg-backlog-value.has-backlog {
-  color: #f91880;
-}
-
-.xrg-backlog-value.on-track {
-  color: var(--xrg-success);
-}
-
-.xrg-backlog-label {
-  font-size: 14px;
-  color: var(--xrg-text-secondary);
-}
-
-.xrg-backlog-replies {
-  font-size: 12px;
-  color: #71767b;
-  margin-bottom: 12px;
-}
-
-.xrg-backlog-replies.has-backlog {
-  color: #f91880;
-  font-weight: 700;
-}
-
-.xrg-session-info {
+.xrg-session-item {
   background: var(--xrg-bg);
-  padding: 8px;
+  padding: 10px 12px;
   border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-left: 3px solid var(--xrg-primary);
+}
+
+.xrg-session-info-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.xrg-session-number {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--xrg-primary);
+}
+
+.xrg-session-time {
   font-size: 11px;
   color: var(--xrg-text-secondary);
 }
 
-.xrg-session-info-item {
-  padding: 4px 0;
+.xrg-session-replies-count {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--xrg-text);
 }
 
-.xrg-sessions-completed,
-.xrg-sessions-remaining {
-  font-weight: 700;
-  color: var(--xrg-text);
+.xrg-session-replies-label {
+  font-size: 10px;
+  color: var(--xrg-text-secondary);
+  text-align: right;
 }
 
 /* Heatmap */
@@ -784,6 +785,23 @@
   font-size: 11px;
   font-weight: 700;
   color: var(--xrg-text);
+}
+
+.xrg-debug-btn {
+  background: var(--xrg-bg);
+  border: 1px solid var(--xrg-border);
+  padding: 6px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--xrg-text);
+  transition: all 0.2s ease;
+}
+
+.xrg-debug-btn:hover {
+  background: var(--xrg-bg-elevated);
+  border-color: var(--xrg-primary);
 }
 
 /* Confetti Container */

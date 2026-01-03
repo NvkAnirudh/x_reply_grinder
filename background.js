@@ -83,7 +83,8 @@ async function getStats() {
     sessionReplies: 0,
     sessionBlocks: 0,
     sessionsCompleted: 0,
-    totalSessionTime: 0 // Total time spent in sessions today (ms)
+    totalSessionTime: 0,
+    sessionHistory: [] // Array of completed sessions: [{ startTime, endTime, replies, blocks }, ...]
   };
 
   let stats = result.stats || defaultStats;
@@ -116,6 +117,7 @@ async function getStats() {
     stats.sessionBlocks = 0;
     stats.sessionsCompleted = 0;
     stats.totalSessionTime = 0;
+    stats.sessionHistory = [];
 
     await chrome.storage.local.set({ stats });
   }
@@ -137,10 +139,16 @@ async function getStats() {
     await chrome.storage.local.set({ stats });
   }
 
+  // Ensure sessionHistory exists
+  if (!Array.isArray(stats.sessionHistory)) {
+    stats.sessionHistory = [];
+    await chrome.storage.local.set({ stats });
+  }
+
   return stats;
 }
 
-// Calculate session stats and backlog
+// Calculate session stats
 function calculateSessionStats(stats) {
   const now = Date.now();
   let currentSessionTime = 0;
@@ -150,35 +158,19 @@ function calculateSessionStats(stats) {
   // Calculate current session progress if timer is active
   if (stats.timerEnabled && stats.sessionStartTime) {
     currentSessionTime = now - stats.sessionStartTime;
-    // Use the session blocks/replies from stats, which are tracked during the session
     currentSessionBlocks = stats.sessionBlocks || 0;
     currentSessionReplies = stats.sessionReplies || 0;
   }
 
-  const completedSessions = Math.max(0, stats.sessionsCompleted || 0);
-
-  // Backlog calculation: SESSION-SPECIFIC
-  // Only care about current session performance vs target (4 blocks)
-  let backlog = 0;
-  let backlogReplies = 0;
-
-  if (stats.timerEnabled && stats.sessionStartTime) {
-    // Currently in a session - calculate backlog for THIS session only
-    const sessionTarget = BLOCKS_PER_SESSION; // Always 4 blocks per session
-    const sessionActual = currentSessionBlocks;
-    backlog = Math.max(0, sessionTarget - sessionActual);
-    backlogReplies = backlog * REPLIES_PER_BLOCK;
-  }
-  // If no active session, backlog is 0 (not tracking cumulative backlog across days)
+  const sessionHistory = stats.sessionHistory || [];
+  const sessionsToday = sessionHistory.length;
 
   return {
     currentSessionTime,
     currentSessionBlocks,
     currentSessionReplies,
-    completedSessions,
-    backlog,
-    backlogReplies,
-    remainingSessions: Math.max(0, SESSIONS_PER_DAY - completedSessions - (stats.timerEnabled ? 1 : 0))
+    sessionHistory,
+    sessionsToday
   };
 }
 
@@ -261,7 +253,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_STATS') {
     getStats().then(stats => {
       const sessionStats = calculateSessionStats(stats);
-      sendResponse({
+      const response = {
         stats,
         sessionStats,
         rank: getRank(stats.lifetimeBlocks),
@@ -270,7 +262,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         REPLIES_PER_BLOCK,
         BLOCKS_PER_SESSION,
         SESSIONS_PER_DAY
+      };
+      console.log('XRG: GET_STATS response:', {
+        todayReplies: stats.todayReplies,
+        todayBlocks: stats.todayBlocks,
+        lifetimeReplies: stats.lifetimeReplies,
+        lifetimeBlocks: stats.lifetimeBlocks,
+        sessionsCompleted: stats.sessionsCompleted,
+        timerEnabled: stats.timerEnabled,
+        sessionStats
       });
+      sendResponse(response);
     });
     return true;
   }
@@ -289,24 +291,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const wasEnabled = stats.timerEnabled;
       stats.timerEnabled = !stats.timerEnabled;
 
+      console.log('XRG: TOGGLE_TIMER', {
+        wasEnabled,
+        nowEnabled: stats.timerEnabled,
+        sessionStartTime: stats.sessionStartTime,
+        sessionsCompleted: stats.sessionsCompleted
+      });
+
       if (stats.timerEnabled) {
         // Start new session
         stats.sessionStartTime = Date.now();
         stats.sessionReplies = 0;
         stats.sessionBlocks = 0;
+        console.log('XRG: Session started', { sessionStartTime: stats.sessionStartTime });
       } else {
-        // End current session - save progress
-        // Only count as completed if session was actually running
+        // End current session - save to history
         if (wasEnabled && stats.sessionStartTime) {
           const sessionDuration = Date.now() - stats.sessionStartTime;
 
-          // Always count the session as completed when manually ended
-          // (even if less than 30 mins)
-          stats.totalSessionTime += sessionDuration;
-          stats.sessionsCompleted = (stats.sessionsCompleted || 0) + 1;
+          // Save session to history
+          if (!stats.sessionHistory) {
+            stats.sessionHistory = [];
+          }
 
-          // Cap at max sessions per day
-          stats.sessionsCompleted = Math.min(stats.sessionsCompleted, SESSIONS_PER_DAY);
+          const sessionRecord = {
+            startTime: stats.sessionStartTime,
+            endTime: Date.now(),
+            duration: sessionDuration,
+            replies: stats.sessionReplies || 0,
+            blocks: stats.sessionBlocks || 0
+          };
+
+          stats.sessionHistory.push(sessionRecord);
+          stats.totalSessionTime += sessionDuration;
+          stats.sessionsCompleted = stats.sessionHistory.length;
+
+          console.log('XRG: Session ended', {
+            sessionDuration,
+            replies: sessionRecord.replies,
+            blocks: sessionRecord.blocks,
+            totalSessions: stats.sessionsCompleted
+          });
         }
 
         stats.sessionStartTime = null;
@@ -315,6 +340,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       await chrome.storage.local.set({ stats });
+      console.log('XRG: Stats saved to storage');
       sendResponse({ timerEnabled: stats.timerEnabled, sessionsCompleted: stats.sessionsCompleted });
     });
     return true;
@@ -336,9 +362,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     getStats().then(async stats => {
       if (stats.timerEnabled && stats.sessionStartTime) {
         const sessionDuration = Date.now() - stats.sessionStartTime;
+
+        // Save session to history
+        if (!stats.sessionHistory) {
+          stats.sessionHistory = [];
+        }
+
+        const sessionRecord = {
+          startTime: stats.sessionStartTime,
+          endTime: Date.now(),
+          duration: sessionDuration,
+          replies: stats.sessionReplies || 0,
+          blocks: stats.sessionBlocks || 0
+        };
+
+        stats.sessionHistory.push(sessionRecord);
         stats.totalSessionTime += sessionDuration;
-        stats.sessionsCompleted = (stats.sessionsCompleted || 0) + 1;
-        stats.sessionsCompleted = Math.min(stats.sessionsCompleted, SESSIONS_PER_DAY);
+        stats.sessionsCompleted = stats.sessionHistory.length;
+
+        console.log('XRG: Session auto-ended at 30 mins', {
+          replies: sessionRecord.replies,
+          blocks: sessionRecord.blocks,
+          totalSessions: stats.sessionsCompleted
+        });
       }
       stats.timerEnabled = false;
       stats.sessionStartTime = null;
@@ -393,6 +439,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         stats.sessionBlocks = 0;
       }
 
+      console.log('XRG: Manual count set:', { newCount, todayReplies: stats.todayReplies, lifetimeReplies: stats.lifetimeReplies });
+      await chrome.storage.local.set({ stats });
+      sendResponse({ success: true, stats });
+    });
+    return true;
+  }
+
+  if (message.type === 'SET_MANUAL_LIFETIME') {
+    getStats().then(async stats => {
+      const newLifetime = message.count;
+      const lifetimeBlocks = Math.floor(newLifetime / REPLIES_PER_BLOCK);
+
+      // Directly set lifetime values
+      stats.lifetimeReplies = newLifetime;
+      stats.lifetimeBlocks = lifetimeBlocks;
+
+      // Ensure lifetime is at least as much as today's count
+      stats.lifetimeReplies = Math.max(stats.lifetimeReplies, stats.todayReplies);
+      stats.lifetimeBlocks = Math.max(stats.lifetimeBlocks, stats.todayBlocks);
+
+      console.log('XRG: Manual lifetime set:', { newLifetime, lifetimeReplies: stats.lifetimeReplies, todayReplies: stats.todayReplies });
       await chrome.storage.local.set({ stats });
       sendResponse({ success: true, stats });
     });

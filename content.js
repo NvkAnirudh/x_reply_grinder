@@ -165,18 +165,34 @@
 
             <!-- Manual Count Adjustment -->
             <div class="xrg-manual-adjust-section">
-              <div class="xrg-section-title">Adjust Today's Count</div>
-              <div class="xrg-manual-adjust-container">
-                <input
-                  type="number"
-                  class="xrg-manual-input"
-                  placeholder="Enter count"
-                  min="0"
-                  max="1000"
-                />
-                <button class="xrg-manual-set-btn">Set</button>
+              <div class="xrg-section-title">Adjust Counts</div>
+              <div class="xrg-manual-adjust-row">
+                <label class="xrg-manual-label">Today's Replies:</label>
+                <div class="xrg-manual-adjust-container">
+                  <input
+                    type="number"
+                    class="xrg-manual-input xrg-manual-today"
+                    placeholder="0"
+                    min="0"
+                    max="1000"
+                  />
+                  <button class="xrg-manual-set-btn xrg-set-today">Set</button>
+                </div>
               </div>
-              <div class="xrg-manual-help">Set starting count if you already have replies today</div>
+              <div class="xrg-manual-adjust-row">
+                <label class="xrg-manual-label">Lifetime Replies:</label>
+                <div class="xrg-manual-adjust-container">
+                  <input
+                    type="number"
+                    class="xrg-manual-input xrg-manual-lifetime"
+                    placeholder="0"
+                    min="0"
+                    max="100000"
+                  />
+                  <button class="xrg-manual-set-btn xrg-set-lifetime">Set</button>
+                </div>
+              </div>
+              <div class="xrg-manual-help">Adjust if starting counts are incorrect</div>
             </div>
 
             <!-- Session Timer -->
@@ -206,24 +222,12 @@
               </div>
             </div>
 
-            <!-- Backlog Section -->
-            <div class="xrg-backlog-section">
-              <div class="xrg-section-title">Session Progress</div>
-              <div class="xrg-backlog-container">
-                <div class="xrg-backlog-status">No active session</div>
-                <div class="xrg-backlog-main" style="display: none;">
-                  <span class="xrg-backlog-value">0</span>
-                  <span class="xrg-backlog-label">blocks short of target</span>
-                </div>
-                <div class="xrg-backlog-replies" style="display: none;">(0 replies needed)</div>
-                <div class="xrg-session-info">
-                  <div class="xrg-session-info-item">
-                    <span class="xrg-sessions-completed">0</span>/5 sessions completed
-                  </div>
-                  <div class="xrg-session-info-item">
-                    <span class="xrg-sessions-remaining">5</span> sessions remaining
-                  </div>
-                </div>
+            <!-- Session History Section -->
+            <div class="xrg-session-history-section">
+              <div class="xrg-section-title">Today's Sessions</div>
+              <div class="xrg-session-history-container">
+                <div class="xrg-no-sessions">No sessions completed yet</div>
+                <div class="xrg-session-list"></div>
               </div>
             </div>
 
@@ -261,6 +265,10 @@
                 <button class="xrg-toggle-btn xrg-sound-toggle active">
                   <span class="xrg-toggle-label">ON</span>
                 </button>
+              </div>
+              <div class="xrg-setting-row">
+                <span>Debug Info</span>
+                <button class="xrg-debug-btn">View Storage</button>
               </div>
             </div>
           </div>
@@ -310,9 +318,12 @@
     const logBtn = widget.querySelector('.xrg-log-btn');
     const logBtnLarge = widget.querySelector('.xrg-log-btn-large');
     const soundToggle = widget.querySelector('.xrg-sound-toggle');
-    const manualInput = widget.querySelector('.xrg-manual-input');
-    const manualSetBtn = widget.querySelector('.xrg-manual-set-btn');
+    const manualTodayInput = widget.querySelector('.xrg-manual-today');
+    const manualLifetimeInput = widget.querySelector('.xrg-manual-lifetime');
+    const setTodayBtn = widget.querySelector('.xrg-set-today');
+    const setLifetimeBtn = widget.querySelector('.xrg-set-lifetime');
     const timerToggle = widget.querySelector('.xrg-timer-toggle');
+    const debugBtn = widget.querySelector('.xrg-debug-btn');
 
     // Click compact to expand
     compact.addEventListener('click', (e) => {
@@ -341,17 +352,38 @@
     });
 
     // Manual count adjustment
-    manualSetBtn.addEventListener('click', () => setManualCount());
-    manualInput.addEventListener('keypress', (e) => {
+    setTodayBtn.addEventListener('click', () => setManualTodayCount());
+    manualTodayInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
-        setManualCount();
+        setManualTodayCount();
+      }
+    });
+
+    setLifetimeBtn.addEventListener('click', () => setManualLifetimeCount());
+    manualLifetimeInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        setManualLifetimeCount();
       }
     });
 
     // Timer toggle
     timerToggle.addEventListener('click', async () => {
-      await chrome.runtime.sendMessage({ type: 'TOGGLE_TIMER' });
+      console.log('XRG: Timer toggle clicked');
+      const response = await chrome.runtime.sendMessage({ type: 'TOGGLE_TIMER' });
+      console.log('XRG: Timer toggle response:', response);
       refreshStats();
+    });
+
+    // Debug button
+    debugBtn.addEventListener('click', async () => {
+      const result = await chrome.storage.local.get(['stats']);
+      console.log('XRG: Storage Data:', result.stats);
+      alert('Storage data logged to console (F12).\n\nKey values:\n' +
+        `Today: ${result.stats?.todayReplies || 0} replies, ${result.stats?.todayBlocks || 0} blocks\n` +
+        `Lifetime: ${result.stats?.lifetimeReplies || 0} replies, ${result.stats?.lifetimeBlocks || 0} blocks\n` +
+        `Sessions completed: ${result.stats?.sessionsCompleted || 0}/5\n` +
+        `Timer enabled: ${result.stats?.timerEnabled || false}`
+      );
     });
 
     // Dragging
@@ -477,10 +509,10 @@
     }
   }
 
-  // Set manual count
-  async function setManualCount() {
+  // Set manual today count
+  async function setManualTodayCount() {
     const widget = document.getElementById('xrg-widget');
-    const manualInput = widget.querySelector('.xrg-manual-input');
+    const manualInput = widget.querySelector('.xrg-manual-today');
     const value = parseInt(manualInput.value);
 
     if (isNaN(value) || value < 0 || value > 1000) {
@@ -497,10 +529,38 @@
       if (response && response.success) {
         manualInput.value = '';
         refreshStats();
-        showToast(`Count set to ${value} replies`, true);
+        showToast(`Today's count set to ${value} replies`, true);
       }
     } catch (e) {
       console.error('XRG: Error setting manual count', e);
+      showToast('Error setting count');
+    }
+  }
+
+  // Set manual lifetime count
+  async function setManualLifetimeCount() {
+    const widget = document.getElementById('xrg-widget');
+    const manualInput = widget.querySelector('.xrg-manual-lifetime');
+    const value = parseInt(manualInput.value);
+
+    if (isNaN(value) || value < 0 || value > 100000) {
+      showToast('Please enter a valid count (0-100000)');
+      return;
+    }
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'SET_MANUAL_LIFETIME',
+        count: value
+      });
+
+      if (response && response.success) {
+        manualInput.value = '';
+        refreshStats();
+        showToast(`Lifetime count set to ${value} replies`, true);
+      }
+    } catch (e) {
+      console.error('XRG: Error setting lifetime count', e);
       showToast('Error setting count');
     }
   }
@@ -590,10 +650,14 @@
       soundToggle.classList.toggle('active', stats.soundEnabled);
       soundToggle.querySelector('.xrg-toggle-label').textContent = stats.soundEnabled ? 'ON' : 'OFF';
 
-      // Update manual input placeholder
-      const manualInput = widget.querySelector('.xrg-manual-input');
-      if (manualInput) {
-        manualInput.placeholder = `Current: ${stats.todayReplies}`;
+      // Update manual input placeholders
+      const manualTodayInput = widget.querySelector('.xrg-manual-today');
+      const manualLifetimeInput = widget.querySelector('.xrg-manual-lifetime');
+      if (manualTodayInput) {
+        manualTodayInput.placeholder = stats.todayReplies.toString();
+      }
+      if (manualLifetimeInput) {
+        manualLifetimeInput.placeholder = stats.lifetimeReplies.toString();
       }
 
       // Update timer display
@@ -632,54 +696,54 @@
         delete widget.dataset.sessionAutoCompleted;
       }
 
-      // Update backlog section
-      const backlogStatus = widget.querySelector('.xrg-backlog-status');
-      const backlogMain = widget.querySelector('.xrg-backlog-main');
-      const backlogValue = widget.querySelector('.xrg-backlog-value');
-      const backlogReplies = widget.querySelector('.xrg-backlog-replies');
-      const sessionsCompleted = widget.querySelector('.xrg-sessions-completed');
-      const sessionsRemaining = widget.querySelector('.xrg-sessions-remaining');
-
-      if (stats.timerEnabled && stats.sessionStartTime) {
-        // Active session - show backlog tracking
-        backlogStatus.style.display = 'none';
-        backlogMain.style.display = 'flex';
-        backlogReplies.style.display = 'block';
-
-        const backlogLabel = widget.querySelector('.xrg-backlog-label');
-
-        // Show in RED if behind target, GREEN if on track or ahead
-        if (sessionStats.backlog > 0) {
-          // Behind target - show in RED
-          backlogValue.textContent = sessionStats.backlog;
-          backlogValue.classList.add('has-backlog');
-          backlogValue.classList.remove('on-track');
-          backlogLabel.textContent = 'blocks short of target';
-          backlogReplies.textContent = `(${sessionStats.backlogReplies} replies needed)`;
-          backlogReplies.classList.add('has-backlog');
-        } else {
-          // On track or ahead - show in GREEN
-          backlogValue.textContent = sessionStats.currentSessionBlocks;
-          backlogValue.classList.remove('has-backlog');
-          backlogValue.classList.add('on-track');
-          backlogLabel.textContent = 'blocks completed';
-          backlogReplies.textContent = '(On track! ✓)';
-          backlogReplies.classList.remove('has-backlog');
-        }
-      } else {
-        // No active session - show status message
-        backlogStatus.style.display = 'block';
-        backlogMain.style.display = 'none';
-        backlogReplies.style.display = 'none';
-        backlogStatus.textContent = 'No active session';
-      }
-
-      sessionsCompleted.textContent = sessionStats.completedSessions;
-      sessionsRemaining.textContent = sessionStats.remainingSessions;
+      // Update session history
+      updateSessionHistory(sessionStats.sessionHistory);
 
     } catch (e) {
       console.error('XRG: Error refreshing stats', e);
     }
+  }
+
+  // Update session history display
+  function updateSessionHistory(sessionHistory) {
+    const widget = document.getElementById('xrg-widget');
+    const noSessions = widget.querySelector('.xrg-no-sessions');
+    const sessionList = widget.querySelector('.xrg-session-list');
+
+    if (!sessionHistory || sessionHistory.length === 0) {
+      noSessions.style.display = 'block';
+      sessionList.innerHTML = '';
+      return;
+    }
+
+    noSessions.style.display = 'none';
+    sessionList.innerHTML = '';
+
+    // Show sessions in reverse order (most recent first)
+    const sessions = [...sessionHistory].reverse();
+    sessions.forEach((session, index) => {
+      const sessionNum = sessionHistory.length - index;
+      const duration = formatTime(session.duration);
+      const startTime = new Date(session.startTime).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+
+      const sessionItem = document.createElement('div');
+      sessionItem.className = 'xrg-session-item';
+      sessionItem.innerHTML = `
+        <div class="xrg-session-info-left">
+          <span class="xrg-session-number">Session ${sessionNum}</span>
+          <span class="xrg-session-time">${startTime} • ${duration}</span>
+        </div>
+        <div class="xrg-session-info-right">
+          <div class="xrg-session-replies-count">${session.replies}</div>
+          <div class="xrg-session-replies-label">replies</div>
+        </div>
+      `;
+      sessionList.appendChild(sessionItem);
+    });
   }
 
   // Generate heatmap
