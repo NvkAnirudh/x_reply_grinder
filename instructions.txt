@@ -1,0 +1,58 @@
+Build a Chrome extension called "X Reply Grinder" that gamifies daily commenting on X (Twitter).
+Core concept:
+
+User goal: 100 comments/day, broken into 20 blocks of 5 comments each
+Track comments automatically when user posts a reply on X
+Gamify with streaks, progress bars, and satisfying micro-rewards
+
+Features:
+
+Block-based tracking:
+
+Each block = 5 comments
+Visual progress: 0/20 blocks completed today
+Show current block progress (e.g., "Block 7: 3/5 replies")
+
+
+Gamification:
+
+Confetti/animation when a block is completed
+Streak counter (consecutive days hitting 20 blocks)
+Levels/ranks based on total lifetime blocks (e.g., "Reply Rookie" → "Distribution Machine")
+Daily streak flame icon that grows with consistency
+Sound effect toggle for block completion
+
+
+Dashboard popup:
+
+Today's progress (blocks completed, total replies)
+Current streak
+Weekly heatmap (like GitHub contributions)
+Best streak record
+
+
+Timer integration (optional):
+
+Pomodoro-style: 30 min reply session (target: 4 blocks) → 1 hr build time reminder
+Notification: "4 blocks done! Time to build for an hour."
+
+
+Storage:
+
+Use Chrome local storage for daily/weekly/all-time stats
+Reset daily count at 7 pm EST (user's timezone)
+
+
+
+Tech stack:
+
+Manifest V3
+Content script to detect reply submissions on x.com
+Popup UI with progress visualization
+Local storage for persistence
+
+Vibe:
+
+Clean, minimal UI
+Dopamine hits on block completion
+Non-annoying—no intrusive notifications unless enabled

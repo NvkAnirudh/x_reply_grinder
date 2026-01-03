@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>X Reply Grinder</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">X</span>
+        <span class="logo-text">Reply Grinder</span>
+      </div>
+      <div class="streak-badge" id="streakBadge">
+        <span class="flame" id="flameIcon"></span>
+        <span id="streakCount">0</span>
+      </div>
+    </header>
+
+    <!-- Rank Display -->
+    <div class="rank-section">
+      <div class="rank-badge" id="rankBadge">Reply Rookie</div>
+      <div class="rank-progress">
+        <div class="rank-progress-bar" id="rankProgressBar"></div>
+      </div>
+      <div class="rank-next" id="rankNext">Next: Comment Cadet (20 blocks)</div>
+    </div>
+
+    <!-- Today's Progress -->
+    <section class="progress-section">
+      <h2 class="section-title">Today's Progress</h2>
+
+      <!-- Block Progress Ring -->
+      <div class="progress-ring-container">
+        <svg class="progress-ring" viewBox="0 0 120 120">
+          <circle class="progress-ring-bg" cx="60" cy="60" r="52"/>
+          <circle class="progress-ring-fill" cx="60" cy="60" r="52" id="progressRing"/>
+        </svg>
+        <div class="progress-ring-text">
+          <span class="blocks-count" id="blocksCompleted">0</span>
+          <span class="blocks-label">/20 blocks</span>
+        </div>
+      </div>
+
+      <!-- Current Block Progress -->
+      <div class="current-block">
+        <div class="current-block-label">
+          <span>Block <span id="currentBlockNum">1</span></span>
+          <span id="currentBlockProgress">0/5 replies</span>
+        </div>
+        <div class="block-dots" id="blockDots">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </div>
+      </div>
+
+      <!-- Total Replies Today -->
+      <div class="total-replies">
+        <span class="total-label">Total replies today:</span>
+        <span class="total-count" id="totalReplies">0</span>
+        <span class="total-goal">/100</span>
+      </div>
+    </section>
+
+    <!-- Weekly Heatmap -->
+    <section class="heatmap-section">
+      <h2 class="section-title">This Week</h2>
+      <div class="heatmap" id="heatmap">
+        <!-- Days will be inserted here -->
+      </div>
+    </section>
+
+    <!-- Stats Grid -->
+    <section class="stats-section">
+      <div class="stat-card">
+        <span class="stat-value" id="currentStreakStat">0</span>
+        <span class="stat-label">Current Streak</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="bestStreakStat">0</span>
+        <span class="stat-label">Best Streak</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="lifetimeBlocksStat">0</span>
+        <span class="stat-label">Lifetime Blocks</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="lifetimeRepliesStat">0</span>
+        <span class="stat-label">Lifetime Replies</span>
+      </div>
+    </section>
+
+    <!-- Timer Section -->
+    <section class="timer-section" id="timerSection">
+      <div class="timer-header">
+        <h2 class="section-title">Session Timer</h2>
+        <button class="toggle-btn" id="timerToggle">
+          <span class="toggle-label">OFF</span>
+        </button>
+      </div>
+      <div class="timer-content" id="timerContent">
+        <div class="timer-display">
+          <span id="timerValue">00:00</span>
+          <span class="timer-label">elapsed</span>
+        </div>
+        <div class="session-stats">
+          <span><span id="sessionBlocks">0</span> blocks this session</span>
+          <span>Target: 4 blocks in 30 min</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section class="settings-section">
+      <div class="setting-row">
+        <span>Sound effects</span>
+        <button class="toggle-btn" id="soundToggle">
+          <span class="toggle-label">ON</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span>Keep grinding!</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
