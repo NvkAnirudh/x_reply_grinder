@@ -24,7 +24,9 @@
     minimized: false,
     position: { x: 20, y: 100 },
     isDragging: false,
-    dragOffset: { x: 0, y: 0 }
+    dragOffset: { x: 0, y: 0 },
+    selectedDayOffset: 0, // 0 = today, -1 = yesterday, -2 = 2 days ago, etc.
+    dailyHistory: {} // Cache of daily history data
   };
 
   // Load saved position
@@ -114,8 +116,15 @@
               <div class="xrg-rank-next">Next: Comment Cadet (20 blocks)</div>
             </div>
 
+            <!-- Day Selector -->
+            <div class="xrg-day-selector">
+              <button class="xrg-day-nav xrg-day-prev" title="Previous day">‹</button>
+              <div class="xrg-day-label">Today</div>
+              <button class="xrg-day-nav xrg-day-next" title="Next day" disabled>›</button>
+            </div>
+
             <!-- Progress Ring -->
-            <div class="xrg-section-title">Today's Progress</div>
+            <div class="xrg-section-title"><span class="xrg-progress-day-title">Today</span>'s Progress</div>
             <div class="xrg-progress-section">
               <div class="xrg-progress-ring-container">
                 <svg class="xrg-progress-ring" viewBox="0 0 120 120">
@@ -324,6 +333,21 @@
     const setLifetimeBtn = widget.querySelector('.xrg-set-lifetime');
     const timerToggle = widget.querySelector('.xrg-timer-toggle');
     const debugBtn = widget.querySelector('.xrg-debug-btn');
+    const dayPrevBtn = widget.querySelector('.xrg-day-prev');
+    const dayNextBtn = widget.querySelector('.xrg-day-next');
+
+    // Day navigation
+    dayPrevBtn.addEventListener('click', () => {
+      widgetState.selectedDayOffset--;
+      updateDayNavigation();
+      refreshStats();
+    });
+
+    dayNextBtn.addEventListener('click', () => {
+      widgetState.selectedDayOffset++;
+      updateDayNavigation();
+      refreshStats();
+    });
 
     // Click compact to expand
     compact.addEventListener('click', (e) => {
@@ -458,6 +482,9 @@
       if (response) {
         const { stats, blockCompleted, newBlockNumber } = response;
 
+        // Switch to today's view when logging
+        widgetState.selectedDayOffset = 0;
+
         // Update UI
         refreshStats();
 
@@ -528,6 +555,7 @@
 
       if (response && response.success) {
         manualInput.value = '';
+        widgetState.selectedDayOffset = 0; // Switch to today's view
         refreshStats();
         showToast(`Today's count set to ${value} replies`, true);
       }
@@ -556,6 +584,7 @@
 
       if (response && response.success) {
         manualInput.value = '';
+        widgetState.selectedDayOffset = 0; // Switch to today's view
         refreshStats();
         showToast(`Lifetime count set to ${value} replies`, true);
       }
@@ -563,6 +592,53 @@
       console.error('XRG: Error setting lifetime count', e);
       showToast('Error setting count');
     }
+  }
+
+  // Get date key for selected day offset
+  function getSelectedDateKey() {
+    const today = new Date();
+    const selectedDate = new Date(today);
+    selectedDate.setDate(selectedDate.getDate() + widgetState.selectedDayOffset);
+    return selectedDate.toISOString().split('T')[0];
+  }
+
+  // Format date for display
+  function formatDateLabel(offset) {
+    if (offset === 0) return 'Today';
+    if (offset === -1) return 'Yesterday';
+
+    const date = new Date();
+    date.setDate(date.getDate() + offset);
+    const month = date.toLocaleDateString('en-US', { month: 'short' });
+    const day = date.getDate();
+    return `${month} ${day}`;
+  }
+
+  // Update day navigation UI
+  function updateDayNavigation() {
+    const widget = document.getElementById('xrg-widget');
+    if (!widget) return;
+
+    const dayLabel = widget.querySelector('.xrg-day-label');
+    const dayPrevBtn = widget.querySelector('.xrg-day-prev');
+    const dayNextBtn = widget.querySelector('.xrg-day-next');
+    const progressDayTitle = widget.querySelector('.xrg-progress-day-title');
+
+    // Update label
+    dayLabel.textContent = formatDateLabel(widgetState.selectedDayOffset);
+    if (progressDayTitle) {
+      progressDayTitle.textContent = widgetState.selectedDayOffset === 0 ? 'Today' : formatDateLabel(widgetState.selectedDayOffset);
+    }
+
+    // Enable/disable next button (can't go beyond today)
+    dayNextBtn.disabled = widgetState.selectedDayOffset >= 0;
+
+    // Enable/disable prev button based on available history (max 30 days back)
+    const selectedDateKey = getSelectedDateKey();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const minDateKey = thirtyDaysAgo.toISOString().split('T')[0];
+    dayPrevBtn.disabled = selectedDateKey <= minDateKey;
   }
 
   // Format time for display
@@ -579,12 +655,42 @@
       const response = await chrome.runtime.sendMessage({ type: 'GET_STATS' });
       if (!response) return;
 
-      const { stats, sessionStats, rank, nextRank } = response;
+      const { stats, sessionStats, rank, nextRank, dailyHistory } = response;
       const widget = document.getElementById('xrg-widget');
       if (!widget) return;
 
-      const repliesInBlock = stats.todayReplies % REPLIES_PER_BLOCK;
-      const currentBlockNum = stats.todayBlocks + (repliesInBlock > 0 || stats.todayBlocks === 0 ? 1 : 0);
+      // Cache daily history
+      widgetState.dailyHistory = dailyHistory || {};
+
+      // Determine which day's data to show
+      let displayReplies, displayBlocks, displaySessionHistory;
+      const selectedDateKey = getSelectedDateKey();
+
+      if (widgetState.selectedDayOffset === 0) {
+        // Show today's live data
+        displayReplies = stats.todayReplies;
+        displayBlocks = stats.todayBlocks;
+        displaySessionHistory = stats.sessionHistory || [];
+      } else {
+        // Show historical data
+        const historicalData = widgetState.dailyHistory[selectedDateKey];
+        if (historicalData) {
+          displayReplies = historicalData.replies || 0;
+          displayBlocks = historicalData.blocks || 0;
+          displaySessionHistory = historicalData.sessionHistory || [];
+        } else {
+          // No data for this day
+          displayReplies = 0;
+          displayBlocks = 0;
+          displaySessionHistory = [];
+        }
+      }
+
+      const repliesInBlock = displayReplies % REPLIES_PER_BLOCK;
+      const currentBlockNum = displayBlocks + (repliesInBlock > 0 || displayBlocks === 0 ? 1 : 0);
+
+      // Update day navigation
+      updateDayNavigation();
 
       // Compact card updates
       widget.querySelector('.xrg-mini-ring-text').textContent = stats.todayBlocks;
@@ -610,10 +716,10 @@
 
       // Sidebar updates
       widget.querySelector('.xrg-rank-badge').textContent = rank.name;
-      widget.querySelector('.xrg-blocks-count').textContent = stats.todayBlocks;
+      widget.querySelector('.xrg-blocks-count').textContent = displayBlocks;
       widget.querySelector('.xrg-current-block-num').textContent = Math.min(currentBlockNum, BLOCKS_PER_DAY);
       widget.querySelector('.xrg-current-block-progress').textContent = `${repliesInBlock}/5 replies`;
-      widget.querySelector('.xrg-total-count').textContent = stats.todayReplies;
+      widget.querySelector('.xrg-total-count').textContent = displayReplies;
       widget.querySelector('.xrg-current-streak').textContent = stats.currentStreak;
       widget.querySelector('.xrg-best-streak').textContent = stats.bestStreak;
       widget.querySelector('.xrg-lifetime-blocks').textContent = stats.lifetimeBlocks;
@@ -632,7 +738,7 @@
       // Progress ring
       const ringFill = widget.querySelector('.xrg-progress-ring-fill');
       const circumference = 2 * Math.PI * 52;
-      const progress = stats.todayBlocks / BLOCKS_PER_DAY;
+      const progress = displayBlocks / BLOCKS_PER_DAY;
       ringFill.style.strokeDasharray = circumference;
       ringFill.style.strokeDashoffset = circumference * (1 - progress);
 
@@ -697,7 +803,7 @@
       }
 
       // Update session history
-      updateSessionHistory(sessionStats.sessionHistory);
+      updateSessionHistory(displaySessionHistory);
 
     } catch (e) {
       console.error('XRG: Error refreshing stats', e);

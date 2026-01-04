@@ -76,6 +76,7 @@ async function getStats() {
     lifetimeBlocks: 0,
     lifetimeReplies: 0,
     weeklyData: {},
+    dailyHistory: {}, // Full daily stats: { [dateKey]: { replies, blocks, sessionHistory } }
     lastActiveDate: null,
     soundEnabled: true,
     timerEnabled: false,
@@ -91,6 +92,28 @@ async function getStats() {
 
   // Reset daily stats if it's a new day
   if (stats.todayKey !== todayKey) {
+    // Save yesterday's stats to history before resetting
+    if (stats.todayKey && stats.todayReplies > 0) {
+      if (!stats.dailyHistory) {
+        stats.dailyHistory = {};
+      }
+      stats.dailyHistory[stats.todayKey] = {
+        replies: stats.todayReplies,
+        blocks: stats.todayBlocks,
+        sessionHistory: stats.sessionHistory || []
+      };
+
+      // Clean up old daily history (keep only last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const thirtyDaysAgoKey = thirtyDaysAgo.toISOString().split('T')[0];
+      for (const key of Object.keys(stats.dailyHistory)) {
+        if (key < thirtyDaysAgoKey) {
+          delete stats.dailyHistory[key];
+        }
+      }
+    }
+
     // Check if yesterday's goal was met for streak
     const yesterdayBlocks = stats.todayBlocks;
 
@@ -142,6 +165,19 @@ async function getStats() {
   // Ensure sessionHistory exists
   if (!Array.isArray(stats.sessionHistory)) {
     stats.sessionHistory = [];
+    await chrome.storage.local.set({ stats });
+  }
+
+  // Ensure dailyHistory exists
+  if (!stats.dailyHistory || typeof stats.dailyHistory !== 'object') {
+    stats.dailyHistory = {};
+    await chrome.storage.local.set({ stats });
+  }
+
+  // Recalculate lifetime blocks from lifetime replies to fix any discrepancies
+  const correctLifetimeBlocks = Math.floor(stats.lifetimeReplies / REPLIES_PER_BLOCK);
+  if (stats.lifetimeBlocks !== correctLifetimeBlocks) {
+    stats.lifetimeBlocks = correctLifetimeBlocks;
     await chrome.storage.local.set({ stats });
   }
 
@@ -206,7 +242,8 @@ async function incrementReply() {
   const blockCompleted = stats.todayBlocks > previousBlocks;
 
   if (blockCompleted) {
-    stats.lifetimeBlocks++;
+    // Recalculate lifetime blocks from lifetime replies to stay in sync
+    stats.lifetimeBlocks = Math.floor(stats.lifetimeReplies / REPLIES_PER_BLOCK);
 
     // Check for streak update if daily goal met
     if (stats.todayBlocks >= BLOCKS_PER_DAY && previousBlocks < BLOCKS_PER_DAY) {
@@ -253,9 +290,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_STATS') {
     getStats().then(stats => {
       const sessionStats = calculateSessionStats(stats);
+      const dailyHistory = stats.dailyHistory || {};
       const response = {
         stats,
         sessionStats,
+        dailyHistory,
         rank: getRank(stats.lifetimeBlocks),
         nextRank: getNextRank(stats.lifetimeBlocks),
         BLOCKS_PER_DAY,
@@ -270,7 +309,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         lifetimeBlocks: stats.lifetimeBlocks,
         sessionsCompleted: stats.sessionsCompleted,
         timerEnabled: stats.timerEnabled,
-        sessionStats
+        sessionStats,
+        dailyHistoryKeys: Object.keys(dailyHistory)
       });
       sendResponse(response);
     });
@@ -412,12 +452,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       // Calculate actual change in today's stats
       const replyChange = stats.todayReplies - oldTodayReplies;
-      const blockChange = stats.todayBlocks - oldTodayBlocks;
 
       // Update lifetime stats by the change amount
       // This ensures lifetime always reflects cumulative progress
       stats.lifetimeReplies += replyChange;
-      stats.lifetimeBlocks += blockChange;
+
+      // Recalculate lifetime blocks from lifetime replies to stay in sync
+      stats.lifetimeBlocks = Math.floor(stats.lifetimeReplies / REPLIES_PER_BLOCK);
 
       // Ensure lifetime is never less than today (safety check)
       stats.lifetimeReplies = Math.max(stats.lifetimeReplies, stats.todayReplies);
@@ -449,15 +490,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'SET_MANUAL_LIFETIME') {
     getStats().then(async stats => {
       const newLifetime = message.count;
-      const lifetimeBlocks = Math.floor(newLifetime / REPLIES_PER_BLOCK);
 
       // Directly set lifetime values
       stats.lifetimeReplies = newLifetime;
-      stats.lifetimeBlocks = lifetimeBlocks;
 
       // Ensure lifetime is at least as much as today's count
       stats.lifetimeReplies = Math.max(stats.lifetimeReplies, stats.todayReplies);
-      stats.lifetimeBlocks = Math.max(stats.lifetimeBlocks, stats.todayBlocks);
+
+      // Recalculate lifetime blocks from lifetime replies to stay in sync
+      stats.lifetimeBlocks = Math.floor(stats.lifetimeReplies / REPLIES_PER_BLOCK);
 
       console.log('XRG: Manual lifetime set:', { newLifetime, lifetimeReplies: stats.lifetimeReplies, todayReplies: stats.todayReplies });
       await chrome.storage.local.set({ stats });
